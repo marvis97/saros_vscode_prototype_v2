@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	vscode.workspace.textDocuments.forEach(document => {
 		openDocuments.set(document.uri, document.getText().split('\n'));
-	})
+	});
 	/*
 	context.subscriptions.push(vscode.commands.registerCommand('type', e => {
 		vscode.commands.executeCommand('default:type', {
@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 	))*/
 
-	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(e => readDocument(e)))
+	context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(e => readDocument(e)));
 	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => addToQueue(e.contentChanges, e.document)));
 	context.subscriptions.push(disposable);
 
@@ -52,7 +52,7 @@ function isPendingChange(change: vscode.TextDocumentContentChangeEvent): boolean
 	}
 }
 
-function addToQueue(editInput: readonly vscode.TextDocumentContentChangeEvent[], document: vscode.TextDocument): void {
+async function addToQueue(editInput: readonly vscode.TextDocumentContentChangeEvent[], document: vscode.TextDocument): Promise<void> {
 	// Funktion müsste gelockt werden, um auch in extrem seltenen Fällen eine Abarbeitung der Events in der richtigen Reihenfolge zu garantieren
 	if (editInput.length !== 0) {
 		if (changeQueue.length !== 0) {
@@ -107,8 +107,10 @@ async function revertChange(): Promise<boolean> {
 			if (oldText) {
 				//console.log(oldText[change.range.start.line].substring(change.range.start.character,change.range.end.character))
 				let insertText = oldText[change.range.start.line].substring(change.range.start.character, change.range.end.character);
-				we.insert(document.uri, change.range.start, insertText);
-				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
+				if (insertText !== "") {
+					we.insert(document.uri, change.range.start, insertText);
+					pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
+				}
 			} else {
 				//console.log("ERROR")
 				return false;
@@ -117,119 +119,122 @@ async function revertChange(): Promise<boolean> {
 			if (oldText) {
 				console.log(change);
 				//console.log(oldText[change.range.start.line].substring(change.range.start.character,change.range.end.character))
-				let insertText = oldText[change.range.start.line].substring(change.range.start.character, change.range.end.character)
-				we.insert(document.uri, change.range.start, insertText)
-				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText])
+				let insertText = oldText[change.range.start.line].substring(change.range.start.character, change.range.end.character);
+				we.insert(document.uri, change.range.start, insertText);
+				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
 			} else {
 				//console.log("ERROR")
-				return false
+				return false;
 			}
 		} else if (change.text === '\r\n') {
-			let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + 1, 0))
-			we.delete(document.uri, deleteRange)
-			pendingChanges.push([deleteRange, ""])
+			let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + 1, 0));
+			we.delete(document.uri, deleteRange);
+			pendingChanges.push([deleteRange, ""]);
 		} else if (change.text.includes("\r\n")) {
-			let actText: string[] = change.text.split('\n')
-			let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + actText.length - 1, actText[actText.length - 1].length))
-			we.delete(document.uri, deleteRange)
-			pendingChanges.push([deleteRange, ""])
+			let actText: string[] = change.text.split('\n');
+			let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + actText.length - 1, actText[actText.length - 1].length));
+			we.delete(document.uri, deleteRange);
+			pendingChanges.push([deleteRange, ""]);
 			if (oldText) {
 				//console.log(oldText[change.range.start.line].substring(change.range.start.character,change.range.end.character))
-				let insertText = oldText[change.range.start.line].substring(change.range.start.character, change.range.end.character)
-				we.insert(document.uri, change.range.start, insertText)
-				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText])
+				let insertText = oldText[change.range.start.line].substring(change.range.start.character, change.range.end.character);
+				if (insertText !== "") {
+				we.insert(document.uri, change.range.start, insertText);
+				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
+				}
 			} else {
 				//console.log("ERROR")
-				return false
+				return false;
 			}
 		} else {
-			console.log("ERROR")
+			console.log("ERROR");
 		}
 	} else if (!change.range.isSingleLine) {
 		if (change.text === "") {
 			if (oldText) {
-				let insertText = ""
+				let insertText = "";
 				for (var i = change.range.start.line; i <= change.range.end.line; i++) {
 					if (i === change.range.start.line) {
-						insertText = insertText + oldText[i].substring(change.range.start.character, oldText[i].length) + "\n"
-					} else if (i != change.range.start.line && i != change.range.end.line) {
-						insertText = insertText + oldText[i] + "\n"
+						insertText = insertText + oldText[i].substring(change.range.start.character, oldText[i].length) + "\n";
+					} else if (i !== change.range.start.line && i !== change.range.end.line) {
+						insertText = insertText + oldText[i] + "\n";
 					} else if (i === change.range.end.line) {
-						insertText = insertText + oldText[i].substring(0, change.range.end.character)
+						insertText = insertText + oldText[i].substring(0, change.range.end.character);
 					}
 				}
-				we.insert(document.uri, change.range.start, insertText)
-				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText])
+				we.insert(document.uri, change.range.start, insertText);
+				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
 			}
 
-		} else if (change.text != "" && change.text != "\r\n") {
+		} else if (change.text !== "" && change.text !== "\r\n") {
 			if (oldText) {
-				let actText: string[] = change.text.split('\n')
+				let actText: string[] = change.text.split('\n');
 				// new vscode.Position(Erste Zeile des neuen Textes + Anzahl der neuen Zeilen - erste Zeile, Anzahl der neuen Zeichen)
-				let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + actText.length - 1, actText[actText.length - 1].length))
-				we.delete(document.uri, deleteRange)
-				pendingChanges.push([deleteRange, ""])
-				let insertText = ""
+				let deleteRange = new vscode.Range(change.range.start, new vscode.Position(change.range.start.line + actText.length - 1, actText[actText.length - 1].length));
+				we.delete(document.uri, deleteRange);
+				pendingChanges.push([deleteRange, ""]);
+				let insertText = "";
 				for (let i = change.range.start.line; i <= change.range.end.line; i++) {
 
 					if (i === change.range.start.line) {
-						insertText = insertText + oldText[i].substring(change.range.start.character, oldText[i].length) + "\n"
-					} else if (i != change.range.start.line && i != change.range.end.line) {
-						insertText = insertText + oldText[i] + "\n"
+						insertText = insertText + oldText[i].substring(change.range.start.character, oldText[i].length) + "\n";
+					} else if (i !== change.range.start.line && i !== change.range.end.line) {
+						insertText = insertText + oldText[i] + "\n";
 					} else if (i === change.range.end.line) {
-						insertText = insertText + oldText[i].substring(0, change.range.end.character)
+						insertText = insertText + oldText[i].substring(0, change.range.end.character);
 					}
 				}
-				console.log('KEKS')
-
-				we.insert(document.uri, change.range.start, insertText)
-				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText])
+				console.log('KEKS');
+				if (insertText !== "") {
+				we.insert(document.uri, change.range.start, insertText);
+				pendingChanges.push([new vscode.Range(change.range.start, change.range.start), insertText]);
+				}
 			}
 
 		}
 	}
 
 	lock = true;
-	vscode.workspace.applyEdit(we)
+	vscode.workspace.applyEdit(we);
 
 	if (!await changeToLSP(change, document.uri, document.getText())) {
 		return false;
 	}
 
-	changeQueue.splice(0, 1)
+	changeQueue.splice(0, 1);
 
-	if (changeQueue.length == 0) {
-		return true
+	if (changeQueue.length === 0) {
+		return true;
 	}
-	revertChange()
-	return true
+	revertChange();
+	return true;
 }
 
 async function changeToLSP(change: vscode.TextDocumentContentChangeEvent, uri: vscode.Uri, text: string): Promise<boolean> {
 
-	await delay(1000);
-	changeFromLSP(change, uri, text)
-	return true
+	await delay(10);
+	changeFromLSP(change, uri, text);
+	return true;
 }
 
 async function changeFromLSP(change: vscode.TextDocumentContentChangeEvent, uri: vscode.Uri, text: string): Promise<boolean> {
-	let we = new vscode.WorkspaceEdit()
+	let we = new vscode.WorkspaceEdit();
 	lock = true;
 	try {
-		if (change.text != "") {
-			we.replace(uri, change.range, change.text)
-			pendingChanges.push([change.range, change.text])
+		if (change.text !== "") {
+			we.replace(uri, change.range, change.text);
+			pendingChanges.push([change.range, change.text]);
 		} else if (change.text === "") {
-			we.delete(uri, change.range)
-			pendingChanges.push([change.range, ""])
+			we.delete(uri, change.range);
+			pendingChanges.push([change.range, ""]);
 		}
 
 	} catch {
-		return false
+		return false;
 	}
-	vscode.workspace.applyEdit(we)
-	openDocuments.set(uri, text.split('\n'))
-	return true
+	vscode.workspace.applyEdit(we);
+	openDocuments.set(uri, text.split('\n'));
+	return true;
 
 }
 
